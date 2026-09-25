@@ -11,7 +11,7 @@ import time
 # Deliberately conservative: retry only errors that identify quota/rate limiting.
 _QUOTA_ERROR = re.compile(
     r"(?:rate[_ -]?limit|too many requests|quota|usage limit|exhausted|"
-    r"5[- ]?hour|7[- ]?day|weekly limit|rate_limit_error|http\s*429)",
+    r"5[- ]?hour|7[- ]?day|weekly limit|spend limit|\b429\b)",
     re.IGNORECASE,
 )
 
