@@ -50,8 +50,13 @@ class ClaudeOAuthDirectSDKProfile(ProviderProfile):
     def create_client(self, **client_kwargs):
         try:
             from .directsdk import Client
+            from .account_router import AccountRouter, account_config_dirs
         except ImportError:
             from directsdk import Client
+            from account_router import AccountRouter, account_config_dirs
+        config_dirs = account_config_dirs(client_kwargs.get('env'))
+        if len(config_dirs) > 1:
+            return AccountRouter(Client, client_kwargs, config_dirs)
         return Client(**client_kwargs)
 
     def fetch_models(self, **kwargs):
@@ -90,7 +95,7 @@ profile = ClaudeOAuthDirectSDKProfile(
     base_url='process://claude-subscription-directsdk-experimental',
     process_command='claude',
     process_args=(),
-    process_command_env_vars=('CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND',),
+    process_command_env_vars=('CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND', 'CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIRS'),
     default_aux_model='claude-sonnet-5[1m]',
     fallback_models=tuple(MODEL_METADATA),
     model_aliases={alias: native_model(alias) for alias in ALIASES},

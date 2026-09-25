@@ -353,5 +353,61 @@ class Contract(unittest.TestCase):
         self.assertEqual(bare, {"type": "object", "properties": {}})
 
 
+class AccountRouterContract(unittest.TestCase):
+    class FakeStream:
+        def __init__(self, mode):
+            self.mode = mode
+            self.items = iter(("fallback-ok",)) if mode == "ok" else iter(())
+            self.failed = mode == "quota"
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self.failed:
+                self.failed = False
+                raise RuntimeError("HTTP 429 rate limit exceeded")
+            return next(self.items)
+
+        def close(self):
+            pass
+
+    class FakeClient:
+        def __init__(self, mode):
+            self.mode = mode
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+        def create(self, **kwargs):
+            if kwargs.get("stream"):
+                return AccountRouterContract.FakeStream(self.mode)
+            if self.mode == "quota":
+                raise RuntimeError("quota exhausted")
+            return self.mode
+
+        def close(self):
+            pass
+
+    def router(self, modes):
+        return __import__("account_router").AccountRouter(
+            lambda **kwargs: self.FakeClient(kwargs["env"]["CLAUDE_CONFIG_DIR"]),
+            {"env": {}},
+            modes,
+            cooldown=60,
+        )
+
+    def test_non_stream_fallback_and_quota_classifier(self):
+        import account_router
+        router = self.router(("quota", "ok"))
+        self.assertTrue(account_router.is_quota_error("HTTP 429 rate limit"))
+        self.assertFalse(account_router.is_quota_error("invalid prompt"))
+        self.assertEqual(router.create(model="sonnet"), "ok")
+        router.close()
+
+    def test_stream_fallback_before_first_chunk(self):
+        router = self.router(("quota", "ok"))
+        self.assertEqual(list(router.create(model="sonnet", stream=True)), ["fallback-ok"])
+        router.close()
+
+
 if __name__ == "__main__":
     unittest.main()

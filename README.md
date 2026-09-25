@@ -67,6 +67,15 @@ export CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIR=/path/to/official-cli-config
 
 An inherited `CLAUDE_CONFIG_DIR` also works. To select an executable outside PATH, set `CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND` to its absolute path. There is no unrestricted public CLI-flags setting; isolation and denial flags are plugin-owned. The low-level Python `Client(env=...)` injection is available for explicitly controlled local fixtures and does not apply the inherited-environment guard. It is not the normal Hermes provider path or an OAuth certification mechanism.
 
+For automatic account failover, set two isolated Claude config directories separated by the native platform path separator (`;` on Windows, `:` on POSIX):
+
+```sh
+# Windows (PowerShell syntax shown for illustration)
+$env:CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIRS = 'C:\\Claude\\account-a;C:\\Claude\\account-b'
+```
+
+The first directory is preferred. A second account is tried only after an explicit quota/rate-limit failure, and the exhausted account enters a five-minute cooldown. Streaming failover is allowed only before the first emitted chunk; partial responses are never replayed. This router does not read or mutate CSWAP's private credential store. CSWAP remains useful for provisioning the two directories and checking quota, but `cswap switch` must not run during an active Hermes request.
+
 Persistent configuration:
 
 ```yaml
