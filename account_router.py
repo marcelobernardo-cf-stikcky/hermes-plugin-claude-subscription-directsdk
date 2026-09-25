@@ -18,7 +18,9 @@ _QUOTA_ERROR = re.compile(
 
 def account_config_dirs(env=None):
     """Return configured account directories, preserving their literal order."""
-    source = os.environ if env is None else env
+    source = dict(os.environ)
+    if env:
+        source.update(env)
     raw = source.get("CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIRS", "")
     return tuple(part for part in raw.split(os.pathsep) if part)
 

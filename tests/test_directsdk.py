@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -397,6 +398,8 @@ class AccountRouterContract(unittest.TestCase):
 
     def test_non_stream_fallback_and_quota_classifier(self):
         import account_router
+        with patch.dict(os.environ, {"CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIRS": "quota;ok"}):
+            self.assertEqual(account_router.account_config_dirs({}), ("quota", "ok"))
         router = self.router(("quota", "ok"))
         self.assertTrue(account_router.is_quota_error("HTTP 429 rate limit"))
         self.assertFalse(account_router.is_quota_error("invalid prompt"))
