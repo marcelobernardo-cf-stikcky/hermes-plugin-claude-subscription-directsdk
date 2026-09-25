@@ -44,7 +44,14 @@ class _SyncStream:
         with self._advance_lock:
             while True:
                 if self.stream is None:
-                    self.index, self.stream = self.router._start(self.kwargs)
+                    self.index = self.router._eligible()
+                    if self.index is None:
+                        raise RuntimeError("All Claude subscription accounts are in quota cooldown")
+                    try:
+                        self.index, self.stream = self.router._start(self.kwargs, index=self.index)
+                    except Exception as error:
+                        self._failed(error)
+                        continue
                 try:
                     item = next(self.stream)
                     self.emitted = True
@@ -137,8 +144,9 @@ class AccountRouter:
             # Primary order is stable; the first account is preferred when healthy.
             return candidates[0]
 
-    def _start(self, kwargs, exclude=()):
-        index = self._eligible(exclude)
+    def _start(self, kwargs, exclude=(), index=None):
+        if index is None:
+            index = self._eligible(exclude)
         if index is None:
             raise RuntimeError("All Claude subscription accounts are in quota cooldown")
         request = dict(kwargs)

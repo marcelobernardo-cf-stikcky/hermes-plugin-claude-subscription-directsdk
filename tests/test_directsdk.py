@@ -380,6 +380,8 @@ class AccountRouterContract(unittest.TestCase):
 
         def create(self, **kwargs):
             if kwargs.get("stream"):
+                if self.mode == "startup-quota":
+                    raise RuntimeError("HTTP 429 rate limit exceeded")
                 return AccountRouterContract.FakeStream(self.mode)
             if self.mode == "quota":
                 raise RuntimeError("quota exhausted")
@@ -408,6 +410,11 @@ class AccountRouterContract(unittest.TestCase):
 
     def test_stream_fallback_before_first_chunk(self):
         router = self.router(("quota", "ok"))
+        self.assertEqual(list(router.create(model="sonnet", stream=True)), ["fallback-ok"])
+        router.close()
+
+    def test_stream_fallback_on_startup_quota(self):
+        router = self.router(("startup-quota", "ok"))
         self.assertEqual(list(router.create(model="sonnet", stream=True)), ["fallback-ok"])
         router.close()
 
