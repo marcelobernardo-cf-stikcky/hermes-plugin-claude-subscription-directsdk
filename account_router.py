@@ -14,6 +14,11 @@ _QUOTA_ERROR = re.compile(
     r"5[- ]?hour|7[- ]?day|weekly limit|spend limit|\b429\b)",
     re.IGNORECASE,
 )
+_ACCOUNT_UNAVAILABLE = re.compile(
+    r"(?:not logged in|login required|authentication|unauthorized|"
+    r"invalid credentials|credential.*(?:missing|invalid|expired))",
+    re.IGNORECASE,
+)
 
 
 def account_config_dirs(env=None):
@@ -27,6 +32,10 @@ def account_config_dirs(env=None):
 
 def is_quota_error(error):
     return bool(_QUOTA_ERROR.search(str(error)))
+
+
+def is_account_unavailable_error(error):
+    return is_quota_error(error) or bool(_ACCOUNT_UNAVAILABLE.search(str(error)))
 
 
 class _SyncStream:
@@ -65,7 +74,7 @@ class _SyncStream:
     def _failed(self, error):
         index = self.index
         self.close()
-        if self.emitted or not is_quota_error(error):
+        if self.emitted or not is_account_unavailable_error(error):
             raise error
         self.router._mark_quota(index)
         self.index, self.stream = self.router._start(self.kwargs, exclude={index})
@@ -164,7 +173,7 @@ class AccountRouter:
         try:
             return self._clients[index].chat.completions.create(**kwargs)
         except Exception as error:
-            if not is_quota_error(error):
+            if not is_account_unavailable_error(error):
                 raise
             self._mark_quota(index)
             fallback = self._eligible({index})
@@ -173,7 +182,7 @@ class AccountRouter:
             try:
                 return self._clients[fallback].chat.completions.create(**kwargs)
             except Exception as fallback_error:
-                if is_quota_error(fallback_error):
+                if is_account_unavailable_error(fallback_error):
                     self._mark_quota(fallback)
                 raise
 

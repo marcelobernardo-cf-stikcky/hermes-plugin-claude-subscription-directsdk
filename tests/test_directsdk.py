@@ -405,7 +405,8 @@ class AccountRouterContract(unittest.TestCase):
         router = self.router(("quota", "ok"))
         self.assertTrue(account_router.is_quota_error("HTTP 429 rate limit"))
         self.assertTrue(account_router.is_quota_error("status 429: monthly spend limit"))
-        self.assertFalse(account_router.is_quota_error("invalid prompt"))
+        self.assertTrue(account_router.is_account_unavailable_error("Claude Code is not logged in"))
+        self.assertFalse(account_router.is_account_unavailable_error("invalid prompt"))
         self.assertEqual(router.create(model="sonnet"), "ok")
         router.close()
 
