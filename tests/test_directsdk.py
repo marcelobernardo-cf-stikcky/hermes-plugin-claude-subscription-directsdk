@@ -420,6 +420,38 @@ class AccountRouterContract(unittest.TestCase):
         self.assertEqual(list(router.create(model="sonnet", stream=True)), ["fallback-ok"])
         router.close()
 
+    def test_quota_cooldown_survives_router_rebuild(self):
+        calls = []
+        modes = {"account-a": "quota", "account-b": "ok"}
+
+        class Client:
+            def __init__(self, mode):
+                self.mode = mode
+                self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+            def create(self, **_):
+                calls.append(self.mode)
+                if self.mode == "quota":
+                    raise RuntimeError("quota exhausted")
+                return "ok"
+
+            def close(self):
+                pass
+
+        def factory(**kwargs):
+            return Client(modes[kwargs["env"]["CLAUDE_CONFIG_DIR"]])
+
+        router_cls = __import__("account_router").AccountRouter
+        first = router_cls(factory, {"env": {}}, tuple(modes), cooldown=60)
+        self.assertEqual(first.create(model="sonnet"), "ok")
+        first.close()
+
+        second = router_cls(factory, {"env": {}}, tuple(modes), cooldown=60)
+        self.assertEqual(second.create(model="sonnet"), "ok")
+        second.close()
+
+        self.assertEqual(calls, ["quota", "ok", "ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

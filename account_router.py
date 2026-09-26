@@ -6,6 +6,7 @@ import os
 import re
 import threading
 import time
+import weakref
 
 
 # Deliberately conservative: retry only errors that identify quota/rate limiting.
@@ -19,6 +20,16 @@ _ACCOUNT_UNAVAILABLE = re.compile(
     r"invalid credentials|credential.*(?:missing|invalid|expired))",
     re.IGNORECASE,
 )
+_COOLDOWN_STATE_LOCK = threading.Lock()
+_COOLDOWN_STATES = weakref.WeakKeyDictionary()
+
+
+def _shared_cooldowns(client_factory, config_dirs):
+    """Share five-minute quota state across request-scoped router rebuilds."""
+    key = tuple(os.path.normcase(os.path.abspath(path)) for path in config_dirs)
+    with _COOLDOWN_STATE_LOCK:
+        by_dirs = _COOLDOWN_STATES.setdefault(client_factory, {})
+        return by_dirs.setdefault(key, [0.0] * len(config_dirs))
 
 
 def account_config_dirs(env=None):
@@ -126,8 +137,8 @@ class AccountRouter:
     def __init__(self, client_factory, client_kwargs, config_dirs, cooldown=300):
         self._client_factory = client_factory
         self._cooldown = cooldown
-        self._lock = threading.Lock()
-        self._cooldowns = [0.0] * len(config_dirs)
+        self._lock = _COOLDOWN_STATE_LOCK
+        self._cooldowns = _shared_cooldowns(client_factory, config_dirs)
         self._clients = []
         for config_dir in config_dirs:
             env = dict(client_kwargs.get("env") or os.environ)
